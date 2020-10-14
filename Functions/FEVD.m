@@ -26,9 +26,7 @@ for ii=1:nvars
 
     end
     
-    %Sum across rows should add to FEVD - divide each row at each horizon by
-    %sum
-    
+
 end
 FEVDcont = FEVD./sum(FEVD,2);
 end

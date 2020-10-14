@@ -1,15 +1,27 @@
-function [InvA_draws,ALPHA_draws, SIGMA_draws, HDshock_draws, HDinit_draws, HDconst_draws, IRF_draws, FEVD_draws, EPS_draws] = BVAR_Minn(X, Y, nlags, nvars, Ident, nburn, nsave, irfperiods, options)
+function [InvA_draws,ALPHA_draws, SIGMA_draws, HDshock_draws, HDinit_draws, HDconst_draws, IRF_draws, FEVD_draws, EPS_draws] = BVAR(X, Y, nlags, nvars, Ident, nburn, nsave, irfperiods, options)
 
+% Returns Inverse A matrix draws, dependent on choice of identification,
+% Alpha (VAR coefficients), Var-Cov matrix (Sigma), Historical shock
+% decomp, initial condition contribution, constant constribution, IRFs,
+% FEVD, and structural shocks (eps).
+
+% Modification of Koop (https://sites.google.com/site/garykoop/) and Korobolis (https://sites.google.com/site/dimitriskorobilis/matlab) code to incorporate additional types
+% of prior, idenfitications, FEVD, historical decompositions and IRFs.
+% Some helper functions use functions from Ambrogio Cesa-Bianchi (https://sites.google.com/site/ambropo/MatlabCodes)
+
+% Y and X in specification Y = Alpha*X+error. X should have constants and exogenous variables ordered last after lags of endogenous variables. 
+
+%% Basic parameters
 totiters = nburn+nsave;
 T= size(Y,1);
-K = size(X,2); % 1 for constant
-%Based on Koop and Korobolis code
+K = size(X,2); 
+
 %% Create priors
 % First get ML estimators
-A_OLS = inv(X'*X)*(X'*Y); % This is the matrix of regression coefficients
-a_OLS = A_OLS(:);         % This is the vector of parameters, i.e. it holds
-                          % that a_OLS = vec(A_OLS)
-SSE = (Y - X*A_OLS)'*(Y - X*A_OLS);   % Sum of squared errors
+A_OLS = inv(X'*X)*(X'*Y); 
+a_OLS = A_OLS(:);         
+
+SSE = (Y - X*A_OLS)'*(Y - X*A_OLS);   
 SIGMA_OLS = SSE./(T-(K));
 
 % Initialize Bayesian posterior parameters using OLS values
@@ -18,7 +30,7 @@ ALPHA = A_OLS;     % This is the single draw from the posterior of ALPHA Just re
 SSE_Gibbs = SSE;   % This is the single draw from the posterior of SSE
 SIGMA = SIGMA_OLS; % This is the single draw from the posterior of SIGMA
 
-% Storage space for posterior draws and hdecomp
+% Storage space for posterior draws, hdecomp, FEVD, and IRFs
 ALPHA_draws = nan(nsave,K,nvars);
 SIGMA_draws = nan(nsave,nvars,nvars);
 InvA_draws = nan(nsave, nvars, nvars);
@@ -31,19 +43,19 @@ IRF_draws = nan(nsave, nvars, irfperiods, nvars);
 FEVD_draws = nan(nsave, nvars, nvars, irfperiods);
 EPS_draws = nan(nsave,nvars,T);
 
-%% hyper -params for minnesota prior
+%% Hyper-parameters
 
-A_prior = [0.9*eye(nvars); zeros((nlags-1)*nvars,nvars);zeros(size(X,2)-nlags*nvars,nvars)];  %<---- prior mean of ALPHA (parameter matrix) AR1 is 0.9 and others are 0.
-a_prior = A_prior(:); %<---- prior mean of alpha (parameter vector)
+A_prior = [0.9*eye(nvars); zeros((nlags-1)*nvars,nvars);zeros(size(X,2)-nlags*nvars,nvars)];  % AR1 is 0.9 and others are 0.
+a_prior = A_prior(:); % Vectorize
     
 %tightness priors
-a_bar_1 = 1;%0.5; %tightness on own lags
-a_bar_2 = 1;%1; %tightness on lags of other variables
-a_bar_3 = 1; %1 % tightness on own lags - how much tighter prior gets over time
-a_bar_4 = 10^2; %tightness on constant
+a_bar_1 = 1;% tightness on own AR1 lags
+a_bar_2 = 1;% tightness on lags of other variables
+a_bar_3 = 1;% tightness on own additional lags - how much tighter prior gets over time
+a_bar_4 = 10^2; % tightness on constant and exogenous
 
 sigma_sq = zeros(nvars,1); % vector to store residual variances
-%Set prior for VAR variance as variance of errors from AR equation - get
+%Set prior for Var-Cov as variance of errors from AR equation - get
 %variances from ARs first
 for i = 1:nvars
         % Create lags of dependent variable in i-th equation
@@ -56,23 +68,18 @@ for i = 1:nvars
         sigma_sq(i,1) = (1./(T-nlags+1))*(Y_i - Ylag_i*alpha_i)'*(Y_i - Ylag_i*alpha_i);
 end
 
-    % Variance on priors
-    V_i = zeros(K,nvars);
-    
-    % index in each equation which are the own lags
-%     for ii=1:n
-%         for jj=1:p
-%             phi0((jj-1)*n+ii,(jj-1)*n+ii)=(1/arvar(ii,1))*(lambda1/jj^lambda3)^2;
-%         end
-%     end
+    % Variance on priors - initialize
+    V_i = zeros(K,nvars);  
+    % index variable used for changing which priors are applied.
     ind = zeros(nvars,nlags);
     for i=1:nvars
-        ind(i,:) = i:nvars:nvars*nlags; %constant is at the end!
+        ind(i,:) = i:nvars:nvars*nlags; 
     end
+    % Update matrix V_i
     for i = 1:nvars  % for each i-th equation
-        for j = 1:K   % for each j-th RHS variable
-            lagord = ceil(j/nvars);
-                if j>nlags*nvars
+        for j = 1:K   % for each j-th RHS variable - K = nvars+exog
+            lagord = ceil(j/nvars); % what lag is the loop on
+                if j>nlags*nvars % exogenous are ordered last in VAR
                     V_i(j,i) = a_bar_4*sigma_sq(i,1); % variance on constant                
                 elseif find(j==ind(i,:))>0
                     V_i(j,i) = (1/sigma_sq(i,1))*(a_bar_1./(lagord^a_bar_3))^2; % variance on own lags           
@@ -81,7 +88,7 @@ end
                         if find(j==ind(kj,:))>0 % Find which variable the current j belongs to
                             ll = kj;                   
                         end
-                    end                 % variance on other lags   
+                    end    % variance on other lags  of other variables  
                     V_i(j,i) = (a_bar_2*sigma_sq(i,1))./((nlags^2)*sigma_sq(ll,1));      
                 end
         end
@@ -90,7 +97,7 @@ end
     % Now V is a diagonal matrix with diagonal elements the V_i
     V_prior = diag(V_i(:));  % this is the prior variance of the vector alpha
     
-    % Hyperparameters on inv(SIGMA) ~ W(v_prior,inv(S_prior)) -Var(1)
+    % Hyperparameters for Var Cov ~ W(v_prior,inv(S_prior)) -Var(1)
     v_prior = nvars;
     S_prior = SIGMA_OLS;
     inv_S_prior = inv(S_prior); 
@@ -100,10 +107,10 @@ end
 tic;
 % disp('Number of iterations');
 for iters = 1:totiters  %Start the Gibbs "loop"
-%     if mod(iters,200) == 0
-%         disp(iters);
-%         toc;
-%     end
+    if mod(iters,200) == 0
+        disp(iters);
+        toc;
+    end
     
     %Draw posterior beta, V and sigma
     V_post = inv(inv(V_prior) + kron(inv(SIGMA),X'*X));
@@ -129,33 +136,24 @@ for iters = 1:totiters  %Start the Gibbs "loop"
     S_post = S_prior + (Y - X*ALPHA)'*(Y - X*ALPHA);
     A = chol(nspd(inv(S_post)))'*randn(size(inv(S_post),1),v_post);
     A = A*A';
-    SIGMA = nspd(inv(A));% Draw SIGMA - stabilize to be pos def
+    SIGMA = nspd(inv(A));% Draw SIGMA - stabilize to be pos definite (Using BEAR toolbox function)
     if iters > nburn   
 
     
     % Choose identification and find
         PlotIRF = 0;
         switch Ident
-             case 1 %Gali 1999 LR restrictions
-                [InvA] = gali1999(PlotIRF,ALPHA,SIGMA,nvars,nlags);
-             case 2 % Francis max FEVD ident
-                [InvA] = Francis2014(PlotIRF,ALPHA,SIGMA,nvars,nlags,options.horz, options.target); %preset to use 10 years horizon for FECD identification
-             case 3 % Fisher IST and neutral shock ID
-                [InvA] = Fisher2006_GMM(PlotIRF,ALPHA,SIGMA,nvars,nlags);
-             case 4 % Identification max variance at low freq
-                [InvA] = SpecIdent(PlotIRF,ALPHA,SIGMA,nvars,nlags, options.freqlow, options.freqhigh, options.target); %Last 3 inputs (min q freq, min q freq, var input)
-            case 5 % SR and LR restriction identificaiton
-                [InvA] = LRSR_restrict_bayes(ALPHA,SIGMA,nvars,nlags, options.restrictsign,options.restrictzero, options.restrict_horiz, options.trys);
-            case 6 % Modified max share
-                [InvA] = ModMaxShare(PlotIRF,ALPHA,SIGMA,nvars,nlags,options.horz, options.target);
-            case 7 % Limited spectral
-                [InvA] = SpecIdentLim(PlotIRF, ALPHA,SIGMA,nvars,nlags, options.freqlow, options.freqhigh, options.target, options.horzlim);
-            case 8 % Cholesky 
+            case 1 %Gali 1999 LR restrictions
+                [InvA] = LongRun(ALPHA,SIGMA,nvars,nlags);
+            case 2 % Francis et al. 2014 Max-Share identification
+                [InvA] = MaxShare(ALPHA,SIGMA,nvars,nlags,options.horz, options.target); %preset to use 10 years horizon for FECD identification
+            case 3 % Cholesky 
                 [InvA] = chol(SIGMA,'lower');
             otherwise
                 disp('You have not picked an identification methodology!')
         end
         
+        % Rotate a shock to be positive or negative if needed
         if isfield(options,'rotatesign')==1
             if options.rotatesign==1
                 if InvA(1,1)<0
@@ -164,28 +162,29 @@ for iters = 1:totiters  %Start the Gibbs "loop"
             end
         end
         
+        % Save draws
         if ~isnan(InvA)
             InvA_draws(iters-nburn,:,:)  = InvA;
             ALPHA_draws(iters-nburn,:,:) = ALPHA;
             SIGMA_draws(iters-nburn,:,:) = SIGMA;
-            % Make structural shocks series
             
-             res = (Y - X*ALPHA);
+            % Make structural shocks series
+            res = (Y - X*ALPHA);
             EPS_draws(iters-nburn,:,:) = InvA\res';  
-%             
-%  
 
- 
-        
-                %Shock decomp
-                %HDshock(variable, time, shock) contributions - %HDinit and const =
-                %1 by time.
+            %HDshock(variable, time, shock) contributions - %HDinit and const are (var, time).
             [HDshock_draws(iters-nburn,:,:,:), HDinit_draws(iters-nburn,:,:), HDconst_draws(iters-nburn,:,:)]...
             = HDecomp(InvA,ALPHA,nvars,nlags,T, Y, X);
                 
             %Get IRFs
             [IRF_draws(iters-nburn,:,:,:)] = IRFrun(InvA,ALPHA,nvars,nlags,irfperiods);
-            %Get FEVD
+            
+            %Get FEVD - calculate contribution for each variable - if
+            %options.diff = 1 is chosed, the function will cumulate the
+            %FEVD as if the estimation was on the variable in differences,
+            %but the contribution to the variance of the variable in levels
+            %is desired.
+            % FEVD(endogvar,shock ,time)
             if options.diff == 1
                 [FEVD_draws(iters-nburn,:,:,:)] = FEVDdiff(InvA,ALPHA,nvars,nlags,irfperiods,options.target); %Horizon of FEVD
             else
