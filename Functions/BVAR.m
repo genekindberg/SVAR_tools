@@ -149,6 +149,8 @@ for iters = 1:totiters  %Start the Gibbs "loop"
                 [InvA] = MaxShare(ALPHA,SIGMA,nvars,nlags,options.horz, options.target); %preset to use 10 years horizon for FECD identification
             case 3 % Cholesky 
                 [InvA] = chol(SIGMA,'lower');
+            case 4 % Sign, zero and magnitude
+                [InvA] = LRSR_restrict_bayes(ALPHA,SIGMA,nvars,nlags, options.restrictsign,options.restrictzero, options.restrict_horiz, options.trys, options.FEVDrestrict, options.FEVDperiods);
             otherwise
                 disp('You have not picked an identification methodology!')
         end
@@ -185,7 +187,7 @@ for iters = 1:totiters  %Start the Gibbs "loop"
             %but the contribution to the variance of the variable in levels
             %is desired.
             % FEVD(endogvar,shock ,time)
-            if options.diff == 1
+            if isfield(options, 'diff') && options.diff == 1
                 [FEVD_draws(iters-nburn,:,:,:)] = FEVDdiff(InvA,ALPHA,nvars,nlags,irfperiods,options.target); %Horizon of FEVD
             else
                 [FEVD_draws(iters-nburn,:,:,:)] = FEVD(InvA,ALPHA,nvars,nlags,irfperiods);
