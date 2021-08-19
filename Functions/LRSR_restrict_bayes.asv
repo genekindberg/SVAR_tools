@@ -7,9 +7,10 @@ end
 % B = coefficient mat (const in final column)
 % varmat        % cov mat of residuals
 % nvars, nlags  % number of endog vars, lags
-% restrictsignI  % matrix containing separate array for each shock impact and
+% restrictsign  % cell containing separate array for each shock impact and
 % horizon: % [Shock, Variable, Period, Pos(1)/Neg(-1), Magnitude (at least x response)]
-% restrictzeroI: Matrix containing
+% restrict_horiz % Horizons of interest for zero and sign restrictions. simple array - ie.
+% [1, 3, inf] - always apply horizons and restrictions in ascending order!
 % inf reflects infinite horizon - '1' is impact matrix.
 % trys          % number of trys to match sign restriction - gives up and
 % returns nan matrix if loops exceed this.

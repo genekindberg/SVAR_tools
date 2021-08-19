@@ -8,10 +8,8 @@ addpath([pwd, '\Functions'])
 %% Settings
 nlags = 4; % VAR lags
 irfperiods = 20; % periods to generate IRFs for
-nsave = 3000; % Final number of draws to save
+nsave = 1000; % Final number of Bayes draws to save
 nburn = 500; % Burn in   
-
-% VARs being estimated - using for chart loops - can be expanded
 
 %% Import data to estimate a VAR containing: log labor productivity, log hours worked, log investment/GDP, log consumption/GDP, consumer price inflation, long-term treasury yields.
 USDataQ=xlsread('SVARs.xls','Quarterly');
@@ -62,44 +60,56 @@ Y=DatasetQdiffs((nlags+1):end,:);
 
 %% Set sign restrictions
 shocks = {'Technology', 'Demand', 'Mon. Pol.', 'Supply'};
-Horizons = [1 inf]; % restrictions on the initial period and inifinite period
-% Zero restrictions (1 if zero restriction is imposed, "0" if not)
-E = {[],[zeros(1,4) 1 zeros(1,3)],[zeros(1,4) 1 zeros(1,3)],[zeros(1,4) 1 zeros(1,3)]}; %zero restrictions - none for first "Technology shock" Each other shock has no restrictions on the first period, and cannot influence productivity at the infinite horizon
-% Sign restrictions for each shock (S1-4)
-% "0" no restrictions, 1 for positive, -1 for negative
-% format is [period1(endogvar1 endogvar2 endogvar3 endogvar4)
-% period2(endogvar1 endogvar2 endogvar3 endogvar4)] for each variable of
-% interest.
-% Separate effects on each variable with ";" unless you want to do relative restrictions - 
-% i.e. [0 0 -1 1 zeros(1,4)] would check whether the sum of (10-year bonds minus CPI
-% change) was positive in the first period.
+% Sign restrictions for each shock (Shocks 1-4)
+% [Shock, Variable, Period, Pos(1)/Neg(-1), Magnitude (at least x response)]
 
-% Example
-S1 = [zeros(1,4) 1 0 0 0 ]; % Technology shock has positive long run impact
-S2 = [0 1 0 0 zeros(1,4); 0 0 1 0 zeros(1,4);0 0 0 1 zeros(1,4)]; %demand boosts employment, inflation and policy rates in period one. 
-S3 = [0 -1 0 0 zeros(1,4); 0 0 -1 0 zeros(1,4);0 0 0 1 zeros(1,4)]; % mon pol contraction (employment down, inflation down, interest rates up in period one)
-S4 = [0 -1 0 0 zeros(1,4); 0 0 1 0 zeros(1,4);0 0 0 1 zeros(1,4)]; % supply shock (output down, inflation up, interest rates up in period one)
-S = {S1, S2, S3, S4};
+restspec = [1 1 inf 1 0; % Tech shock has positive long run impact
+                          2 2 0 1 0;% Demand boosts employment
+                          2 3 0 1 0.2;% Demand boosts inflation
+                          2 4 0 1 0; % Demand boosts interest
+                          3 2 0 -1 0;% MonPol reduces employment
+                          3 3 0 -1 0;% MonPol reduces inflation
+                          3 4 0 1 0; % MonPol boosts interest
+                          4 2 0 -1 0;% Supply reduces employment
+                          4 3 0 1 0;% Supply boost inflation
+                          4 4 0 1 0]; % Supply boosts interest] 
+
+Exclusion = [2 1 inf; % Demand no long run impact
+             3 1 inf; % Mon Pol no long run impact
+             4 1 inf]; % Supply no long run impact
+% Exclusion = [];
+                      
+S = restspec;
+E = Exclusion;
+
 
 %% Set FEVD restrictions
-% demand shock has larger impact on labor productivity FEVD in first year, technology at 5 years
-FEVDperiods = [4,20]; % 1 year and 5 years
-FEVDrestrict = {[1 2 1],[1 1 2]}; % {period 1(endogenous variable, shock that is biggest, shock that is smallest FEVD), period 2(endogenous variable, shock that is biggest, shock that is smallest FEVD)}
-% multiple restrictions in each period can be stacked i.e. [1 2 1; 1 3 1]
-% would impose that the second and third shocks had a larger share of FEVD
-% for variable 1 than the first shock in period 1.
+% % demand shock has larger impact on labor productivity FEVD in first year, technology at 5 years
+% FEVDperiods = [4,20]; % 1 year and 5 years
+% FEVDrestrict = {[1 2 1],[1 1 2]}; % {period 1(endogenous variable, shock that is biggest, shock that is smallest FEVD), period 2(endogenous variable, shock that is biggest, shock that is smallest FEVD)}
+% % multiple restrictions in each period can be stacked i.e. [1 2 1; 1 3 1]
+% % would impose that the second and third shocks had a larger share of FEVD
+% % for variable 1 than the first shock in period 1.
+FEVDperiods = [];
+FEVDrestrict = [];
 %% Estimate the BVAR
 Ident = 4; % the fourth identification is the one that allows sign, zero and FEVD restrictions.
 options = [];
 options.restrictsign = S; % add set of sign restrictions
 options.restrictzero = E; % add set of zero restrictions
-options.restrict_horiz = Horizons; % add the horizons for the sign and zero restrictions
-options.trys = 50; % how many random matrices are drawn to try and fit the sign and zero restrictions for each coefficient draw before giving up and redrawing coefficients.
+options.trys = 1000; % how many random matrices are drawn to try and fit the sign and zero restrictions for each bayesian draw of coefficients and variance before giving up and redrawing coefficients.
 options.FEVDperiods = FEVDperiods;
 options.FEVDrestrict = FEVDrestrict;
 
+% BVAR priors
+lambdas = zeros(4,1);
+lambdas(1) = 1;% tightness on own AR1 lags
+lambdas(2) = 1;% tightness on lags of other variables
+lambdas(3) = 1;% tightness on own additional lags - how much tighter prior gets over time
+lambdas(4) = 10^2; % tightness on constant and exogenous
+
 [InvA_draws.Long_RunMixed ,ALPHA_draws.Long_RunMixed, SIGMA_draws.Long_RunMixed, HDshock_draws.Long_RunMixed, HDinit_draws.Long_RunMixed, HDconst_draws.Long_RunMixed, IRF_draws.Long_RunMixed,FEVD_draws.Long_RunMixed] = ...
-    BVAR(X, Y, nlags, nvars, Ident, nburn, nsave, irfperiods, options);
+    BVAR(X, Y, nlags, nvars, Ident, nburn, nsave, irfperiods, lambdas, options);
 
 
 %% Plot

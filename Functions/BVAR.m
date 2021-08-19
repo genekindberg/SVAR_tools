@@ -1,4 +1,4 @@
-function [InvA_draws,ALPHA_draws, SIGMA_draws, HDshock_draws, HDinit_draws, HDconst_draws, IRF_draws, FEVD_draws, EPS_draws] = BVAR(X, Y, nlags, nvars, Ident, nburn, nsave, irfperiods, options)
+function [InvA_draws,ALPHA_draws, SIGMA_draws, HDshock_draws, HDinit_draws, HDconst_draws, IRF_draws, FEVD_draws, EPS_draws] = BVAR(X, Y, nlags, nvars, Ident, nburn, nsave, irfperiods, lambdas, options)
 
 % Returns Inverse A matrix draws, dependent on choice of identification,
 % Alpha (VAR coefficients), Var-Cov matrix (Sigma), Historical shock
@@ -45,29 +45,35 @@ EPS_draws = nan(nsave,nvars,T);
 
 %% Hyper-parameters
 
-A_prior = [0.9*eye(nvars); zeros((nlags-1)*nvars,nvars);zeros(size(X,2)-nlags*nvars,nvars)];  % AR1 is 0.9 and others are 0.
-a_prior = A_prior(:); % Vectorize
+
     
 %tightness priors
-a_bar_1 = 1;% tightness on own AR1 lags
-a_bar_2 = 1;% tightness on lags of other variables
-a_bar_3 = 1;% tightness on own additional lags - how much tighter prior gets over time
-a_bar_4 = 10^2; % tightness on constant and exogenous
+%tightness priors
+a_bar_1 = lambdas(1);% tightness on own AR1 lags
+a_bar_2 = lambdas(2);% tightness on lags of other variables
+a_bar_3 = lambdas(3);% tightness on own additional lags - how much tighter prior gets over time
+a_bar_4 = lambdas(4); % tightness on constant and exogenous
 
-sigma_sq = zeros(nvars,1); % vector to store residual variances
-%Set prior for Var-Cov as variance of errors from AR equation - get
-%variances from ARs first
-for i = 1:nvars
-        % Create lags of dependent variable in i-th equation
-        Ylag_i = mlag2(Y(:,i),nlags);
-        Ylag_i = Ylag_i(nlags+1:T,:);
-        % Dependent variable in i-th equation
-        Y_i = Y(nlags+1:T,i);
-        % OLS estimates of i-th equation
-        alpha_i = inv(Ylag_i'*Ylag_i)*(Ylag_i'*Y_i);
-        sigma_sq(i,1) = (1./(T-nlags+1))*(Y_i - Ylag_i*alpha_i)'*(Y_i - Ylag_i*alpha_i);
+arvar = nan(nvars,1);
+ar = nan(nvars,1);
+for ii=1:nvars
+    % initiate the data
+    Ytemp=Y(:,ii);
+    Xtemp=X(:,[ii:nvars:nvars*nlags,nlags*nvars+1:end]); % Get heterogenous constants in too
+    % obtain the OLS estimator
+    B=(Xtemp'*Xtemp)\(Xtemp'*Ytemp);
+    ar(ii,1) = B(1,1); % 1st AR term for each
+    % obtain the vector of residuals
+    eps=Ytemp-Xtemp*B;
+    % obtain the variance of the series;
+    arvar(ii,1)=(1/(T-(nlags+1)))*(eps'*eps);
 end
 
+
+A_prior = [diag(ar); zeros((nlags-1)*nvars,nvars);zeros(size(X,2)-nlags*nvars,nvars)];  % AR1 is 0.9 and others are 0.
+a_prior = A_prior(:); % Vectorize
+
+sigma_sq = arvar;
     % Variance on priors - initialize
     V_i = zeros(K,nvars);  
     % index variable used for changing which priors are applied.
@@ -150,7 +156,11 @@ for iters = 1:totiters  %Start the Gibbs "loop"
             case 3 % Cholesky 
                 [InvA] = chol(SIGMA,'lower');
             case 4 % Sign, zero and magnitude
-                [InvA] = LRSR_restrict_bayes(ALPHA,SIGMA,nvars,nlags, options.restrictsign,options.restrictzero, options.restrict_horiz, options.trys, options.FEVDrestrict, options.FEVDperiods);
+                 [InvA] = LRSR_restrict_bayes(ALPHA,SIGMA,nvars,nlags, options.restrictsign,options.restrictzero, options.trys, options.FEVDrestrict, options.FEVDperiods);
+            case 5 % Spectral identification
+                [InvA] = SpecIdent(PlotIRF,ALPHA,SIGMA,nvars,nlags, options.freqlow, options.freqhigh, options.target); %Last 3 inputs (min q freq, min q freq, var input)
+            case 6 % Truncated spectral identification
+                [InvA] = SpecIdentLim(ALPHA,SIGMA,nvars,nlags, options.freqlow, options.freqhigh, options.target, options.horzlim);
             otherwise
                 disp('You have not picked an identification methodology!')
         end
