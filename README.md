@@ -21,7 +21,11 @@ The bayesian VAR function outputs:
 Full examples are provided.
 
 ## Long-run and Max Share restrictions
+<<<<<<< HEAD
 The file *RunMain.m* estimates a VAR consisting of US labor productivity, employment, investment and consumption as a share of GDP, inflation, and long-term bond yields. It then demonstrates how to estimate a technology shock using the Spectral, Limited Spectral, long-run, and Max Share restrictions and plots them side by side.
+=======
+The file *RunMain.m* estimates a VAR consisting of US labor productivity, employment, investment and consumption as a share of GDP, inflation, and long-term bond yields. It then demonstrates how to use long-run and Max Share restrictions to identify technology shocks and plots them side by side.
+>>>>>>> bd574345e184811426f627e3841e643f486866db
 
 ## Sign, zero, and relative FEVD contributions
 The file *RunMain_signandzero.m* estimates a VAR consisting of US labor productivity, employment, inflation, and long-term bond yields. It then demonstrates a method of identifying a technology shock, demand shock, monetary policy shock, and a supply shock using sign and zero restrictions. It also demonstrates how to impose FEVD magnitude restrictions. For example, technology shocks are assumed to have a larger share of the variance of labor productivity at the 5 year horizon, while demand shocks are assumed to dominate the FEVD of labor productivity in the first year. This is for demonstrative purposes rather than for any particular theoretical reason.
