@@ -78,7 +78,18 @@ Exclusion = [2 1 inf; % Demand no long run impact
              3 1 inf; % Mon Pol no long run impact
              4 1 inf]; % Supply no long run impact
 % Exclusion = [];
-                      
+
+%% Impose ratio restriction
+% [Shock, variable 1, variable 2, horizon, sign, magnitude] so that variable
+% 1/variable 2 >(1), <(-1) magnitude
+% For example a monetary policy shock that has the opposite impact on
+% inflation and interest rates
+% ratio = [3 4 3 0 -1 0; % ratio of impact on rates over impact on
+% inflation is less than zero.
+%           ]; 
+ratio = [];
+
+%% Assign to function arguments
 S = restspec;
 E = Exclusion;
 
@@ -100,6 +111,7 @@ options.restrictzero = E; % add set of zero restrictions
 options.trys = 1000; % how many random matrices are drawn to try and fit the sign and zero restrictions for each bayesian draw of coefficients and variance before giving up and redrawing coefficients.
 options.FEVDperiods = FEVDperiods;
 options.FEVDrestrict = FEVDrestrict;
+options.ratio = ratio;
 
 % BVAR priors
 lambdas = zeros(4,1);
@@ -174,5 +186,4 @@ subplot(size(Y,2),size(shocks,2),ii*1)
 end
 
 set(gcf, 'Position',  [100, 100, 1000, 800])
-
 
