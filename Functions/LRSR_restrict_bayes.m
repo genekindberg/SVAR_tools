@@ -129,14 +129,12 @@ for iter = 1:trys
                 q = X./norm(X);
                 Q = [Q q];
             else
+
+                R=[Q'];
+                N=null(R)';
                 X = randn(nvars,1);
-                q=X./norm(X);
+                q=N'*(N*X./norm(N*X));
                 Q = [Q q];
-%                 R=[Q'];
-%                 N=null(R)';
-%                 X = randn(nvars,1);
-%                 q=N'*(N*X./norm(N*X));
-%                 Q = [Q q];
             end
         end
     end
