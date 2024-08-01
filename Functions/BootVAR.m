@@ -22,7 +22,7 @@ SSE = (Y - X*A_OLS)'*(Y - X*A_OLS);
 SIGMA_OLS = SSE./(T-(K));
 res = (Y - X*A_OLS);
 
-% Storage space for posterior draws, hdecomp, FEVD, and IRFs
+% Storage space for draws, hdecomp, FEVD, and IRFs
 ALPHA_draws = nan(nsave,K,nvars);
 SIGMA_draws = nan(nsave,nvars,nvars);
 InvA_draws = nan(nsave, nvars, nvars);
@@ -100,9 +100,7 @@ while iters < totiters  %Start the draw loop
                 [InvA] = SpecIdent(PlotIRF,ALPHA,SIGMA,nvars,nlags, options.freqlow, options.freqhigh, options.target); %Last 3 inputs (min q freq, min q freq, var input)
             case 6 % Truncated spectral identification
                 [InvA] = SpecIdentLim(ALPHA,SIGMA,nvars,nlags, options.freqlow, options.freqhigh, options.target, options.horzlim);
-            case 7 % Restrict impact matrix
-                [InvA] = A0restrict(ALPHA,SIGMA,nvars,nlags, options.trys);
-            case 8 % IV var
+            case 7 % IV var
                 [InvA] = IVrestrict(ALPHA,SIGMA,nvars,nlags, IVdraw, resdraw);
             otherwise
                 disp('You have not picked an identification methodology!')
