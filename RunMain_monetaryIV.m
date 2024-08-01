@@ -13,7 +13,7 @@ nburn = 100; % Burn in
 
 % Cutoff point for estimation of the VAR (decomp will be dont on whole dataset)
 loceststart = find(strcmp(meta(2:end,1),'1/31/1978'));
-locest = find(strcmp(meta(2:end,1),'12/31/2012'));
+locest = find(strcmp(meta(2:end,1),'12/31/2007'));
 
 IVGK = USDataQ(loceststart+nlags:locest,end-1);
 IVMAR = USDataQ(loceststart+nlags:locest,end);
@@ -38,7 +38,7 @@ Y=USDataQ((nlags+1):end,:);
 idents = {'IVGK', 'IVMAR'};
 
 %% Estimate the BVAR
-Ident = 8; % Ident 8 in "BootVAR" is the IV identification. It requires that the VAR variable ordered first is the one being instrumented
+Ident = 7; % Ident 8 in "BootVAR" is the IV identification. It requires that the VAR variable ordered first is the one being instrumented
 options = [];
 
 
