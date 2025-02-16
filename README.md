@@ -1,6 +1,8 @@
 # SVAR_tools
 Structural VAR (SVAR) toolbox for bayesian VAR estimation and a range of identification methods. Now also includes OLS identification with wild boostrap errors.
 
+Update 02/16: added AIC lag selection, weak-IV test F statistic, and auto-plotting function in RunMain_monetaryIVautoplot.m
+
 Allows multiple identifications: 
 * Spectral and Limited Spectral restrictions - identifying the shock that maximizes the share of variance in a desired frequency band - see [Dieppe, Francis, and Kindberg-Hanlon 2021 (JEDC)](https://www.sciencedirect.com/science/article/pii/S0165188921001512) and [Dieppe, Francis, and Kindberg-Hanlon 2021 (ECB Working Paper)](https://www.ecb.europa.eu/pub/pdf/scpwps/ecb.wp2534~2383e60ba4.en.pdf?eeffb1db5c1033da86491dbc6c96ce9a)
 * The long-run restriction of Blanchard & Quah 1989/Gali 1999
