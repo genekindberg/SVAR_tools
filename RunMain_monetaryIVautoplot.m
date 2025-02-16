@@ -1,5 +1,5 @@
 clear; clc;
-addpath([pwd, '/Functions'])
+addpath([pwd, '/Functions']) % Backlash if windows
 %% Settings
 
 irfperiods = 48; % periods to generate IRFs for
