@@ -111,11 +111,13 @@ sigma_sq = arvar;
     
 %% Gibbs sampler
 tic;
-% disp('Number of iterations');
+disp('Number of iterations');
+itercheck = 0;
 for iters = 1:totiters  %Start the Gibbs "loop"
-    if mod(iters,200) == 0
+    if mod(iters,100) == 0 && itercheck ~= iters
         disp(iters);
         toc;
+        itercheck = iters;
     end
     
     %Draw posterior beta, V and sigma
